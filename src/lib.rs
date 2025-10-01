@@ -1,3 +1,4 @@
+use core::ops::{ Deref, DerefMut };
 use bevy_ecs::{
     component::{
         ComponentId,
@@ -94,7 +95,18 @@ impl AppExt for bevy_app::App {
 }
 
 
-pub struct Request<E>(E);
+#[derive(Debug)]
+pub struct Request<E>(pub E);
+
+impl<E> Deref for Request<E> {
+    type Target = E;
+    #[inline]
+    fn deref(&self) -> &Self::Target { &self.0 }
+}
+impl<E> DerefMut for Request<E> {
+    #[inline]
+    fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
+}
 
 impl<E> SystemInput for Request<E>
 where
