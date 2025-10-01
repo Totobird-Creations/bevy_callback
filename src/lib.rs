@@ -275,3 +275,79 @@ where
         erased.system.apply_deferred(unsafe { world.world_mut() });
     }
 }
+
+
+pub struct OptionCallback<'w, E>(pub Option<Callback<'w, E>>)
+where
+    E : Request + 'static;
+
+impl<'w, E> Deref for OptionCallback<'w, E>
+where
+    E : Request + 'static
+{
+    type Target = Option<Callback<'w, E>>;
+    fn deref(&self) -> &Self::Target { &self.0 }
+}
+impl<'w, E> DerefMut for OptionCallback<'w, E>
+where
+    E : Request + 'static
+{
+    fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
+}
+
+unsafe impl<E> SystemParam for OptionCallback<'_, E>
+where
+    E : Request
+{
+    type State        = Option<ComponentId>;
+    type Item<'w, 's> = OptionCallback<'w, E>;
+
+    fn init_state(
+        world       : &mut World,
+        system_meta : &mut SystemMeta
+    ) -> Self::State {
+        if let Some(erased) = world.get_resource::<ErasedCallbackSystem<E, E::Response>>() {
+            let other_meta = erased.state.meta();
+
+            if (! (
+                system_meta.component_access_set().is_compatible(other_meta.component_access_set())
+                && system_meta.archetype_component_access().is_compatible(other_meta.archetype_component_access())
+            )) { panic!(
+                "error[B0002]: A parameter in system {} (via Callback<{}>) conflicts with a previous parameter in system {}. Consider removing the duplicate access. See: https://bevyengine.org/learn/errors/b0002",
+                erased.system.name(),
+                core::any::type_name::<E>(),
+                system_meta.name()
+            ); }
+
+            unsafe { system_meta.component_access_set_mut().extend(other_meta.component_access_set().clone()); }
+            unsafe { system_meta.archetype_component_access_mut().extend(other_meta.archetype_component_access()); }
+            Some(<ResMut<'static, ErasedCallbackSystem<E, E::Response>> as SystemParam>::init_state(world, system_meta))
+        } else { None }
+    }
+
+    #[inline]
+    unsafe fn get_param<'w, 's>(
+        state       : &'s mut Self::State,
+        system_meta : &SystemMeta,
+        world       : UnsafeWorldCell<'w>,
+        change_tick : Tick,
+    ) -> Self::Item<'w, 's> {
+        OptionCallback(if let Some(state) = state {
+            let mut erased = unsafe { <ResMut<'w, ErasedCallbackSystem<E, E::Response>> as SystemParam>::get_param(state, system_meta, world, change_tick) };
+            erased.system.update_archetype_component_access(world);
+            Some(Callback { erased, world })
+        } else { None })
+    }
+
+    fn apply(
+        state        : &mut Self::State,
+        _system_meta : &SystemMeta,
+        world        : &mut World
+    ) {
+        if let Some(_) = state {
+            let     world  = world.as_unsafe_world_cell();
+            let mut erased = unsafe { world.get_resource_mut::<ErasedCallbackSystem<E, E::Response>>() }.unwrap();
+            erased.system.apply_deferred(unsafe { world.world_mut() });
+        }
+    }
+}
