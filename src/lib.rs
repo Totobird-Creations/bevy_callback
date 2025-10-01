@@ -32,14 +32,15 @@ pub mod prelude {
     pub use crate::{
         AppExt as _,
         Request,
+        Req,
         Callback
     };
 }
 
 
 #[derive(Resource)]
-pub struct ErasedCallbackSystem<Event, Out> {
-    system : Box<dyn System<In = Request<Event>, Out = Out> + Send + Sync>,
+pub struct ErasedCallbackSystem<E, Out> {
+    system : Box<dyn System<In = Req<E>, Out = Out> + Send + Sync>,
     state  : Box<dyn ErasedSystemParam + Send + Sync>
 }
 
@@ -58,30 +59,28 @@ where
 
 #[cfg(feature = "app")]
 pub trait AppExt {
-    fn add_callback<Event, Out, S, M>(&mut self, system : S) -> &mut Self
+    fn add_callback<E, S, M>(&mut self, system : S) -> &mut Self
     where
-        Event : 'static,
-        Out   : 'static,
-        S     : IntoCallbackSystem<Event, Out, M>;
+        E : Request + 'static,
+        S : IntoCallbackSystem<E, E::Response, M>;
 }
 #[cfg(feature = "app")]
 impl AppExt for bevy_app::App {
-    fn add_callback<Event, Out, S, M>(&mut self, system : S) -> &mut Self
+    fn add_callback<E, S, M>(&mut self, system : S) -> &mut Self
     where
-        Event : 'static,
-        Out   : 'static,
-        S     : IntoCallbackSystem<Event, Out, M>
+        E : Request + 'static,
+        S : IntoCallbackSystem<E, E::Response, M>
     {
         let     world  = self.world_mut();
         let mut system = IntoCallbackSystem::into_system(system);
         let     state  = SystemState::<<S::System as ParametisedSystem>::Param>::new(world);
 
         let world = self.world_mut();
-        if (world.contains_resource::<ErasedCallbackSystem<Event, Out>>()) {
+        if (world.contains_resource::<ErasedCallbackSystem<E, E::Response>>()) {
             panic!(
                 "Duplicate ({}) -> {} callback registered",
-                core::any::type_name::<Event>(),
-                core::any::type_name::<Out>()
+                core::any::type_name::<E>(),
+                core::any::type_name::<E::Response>()
             );
         }
         system.initialize(world);
@@ -95,25 +94,30 @@ impl AppExt for bevy_app::App {
 }
 
 
-#[derive(Debug)]
-pub struct Request<E>(pub E);
+pub trait Request {
+    type Response;
+}
 
-impl<E> Deref for Request<E> {
+
+#[derive(Debug)]
+pub struct Req<E>(pub E);
+
+impl<E> Deref for Req<E> {
     type Target = E;
     #[inline]
     fn deref(&self) -> &Self::Target { &self.0 }
 }
-impl<E> DerefMut for Request<E> {
+impl<E> DerefMut for Req<E> {
     #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
 }
 
-impl<E> SystemInput for Request<E>
+impl<E> SystemInput for Req<E>
 where
     E : 'static
 {
-    type Param<'i> = Request<E>;
-    type Inner<'i> = Request<E>;
+    type Param<'i> = Req<E>;
+    type Inner<'i> = Req<E>;
     #[inline]
     fn wrap(this: Self::Inner<'_>) -> Self::Param<'_> { this }
 }
@@ -153,49 +157,49 @@ where
 { type Param = F::Param; }
 
 
-pub trait CallbackSystem<Event, Out>
+pub trait CallbackSystem<E, Out>
 where
-    Self : ParametisedSystem + System<In = Request<Event>>
+    Self : ParametisedSystem + System<In = Req<E>>
 { }
 
-impl<Event, A, B> CallbackSystem<Event, B::Out> for PipeSystem<A, B>
+impl<E, A, B> CallbackSystem<E, B::Out> for PipeSystem<A, B>
 where
-            A     : ParametisedSystem<In = Request<Event>>,
+            A     : ParametisedSystem<In = Req<E>>,
             B     : ParametisedSystem,
     for<'l> B::In : SystemInput<Inner<'l> = A::Out>
 { }
 
-impl<Event, A, B, F> CallbackSystem<Event, F::Out> for CombinatorSystem<F, A, B>
+impl<E, A, B, F> CallbackSystem<E, F::Out> for CombinatorSystem<F, A, B>
 where
-    F : Combine<A, B, In = Request<Event>> + 'static,
+    F : Combine<A, B, In = Req<E>> + 'static,
     A : ParametisedSystem,
     B : ParametisedSystem
 { }
 
-impl<Event, F, S> CallbackSystem<Event, F::Out> for AdapterSystem<F, S>
+impl<E, F, S> CallbackSystem<E, F::Out> for AdapterSystem<F, S>
 where
-    F : Adapt<S, In = Request<Event>>,
+    F : Adapt<S, In = Req<E>>,
     S : ParametisedSystem
 { }
 
-impl<Event, M, F> CallbackSystem<Event, F::Out> for FunctionSystem<M, F>
+impl<E, M, F> CallbackSystem<E, F::Out> for FunctionSystem<M, F>
 where
     M : 'static,
-    F : SystemParamFunction<M, In = Request<Event>>
+    F : SystemParamFunction<M, In = Req<E>>
 {
 }
 
 
-pub trait IntoCallbackSystem<Event, Out, M> {
-    type System : CallbackSystem<Event, Out>;
+pub trait IntoCallbackSystem<E, Out, M> {
+    type System : CallbackSystem<E, Out>;
     fn into_system(this : Self) -> Self::System;
 }
 
-impl<Event, Out, S, M> IntoCallbackSystem<Event, Out, M> for S
+impl<E, Out, S, M> IntoCallbackSystem<E, Out, M> for S
 where
-    S         : IntoSystem<Request<Event>, Out, M>,
-    S::System : CallbackSystem<Event, Out>,
-    Event     : 'static
+    S         : IntoSystem<Req<E>, Out, M>,
+    S::System : CallbackSystem<E, Out>,
+    E         : 'static
 {
     type System = S::System;
     #[inline]
@@ -203,30 +207,35 @@ where
 }
 
 
-pub struct Callback<'w, Event, Out>
+pub struct Callback<'w, E>
 where
-    Event : 'static,
-    Out   : 'static
+    E : Request + 'static
 {
-    erased : ResMut<'w, ErasedCallbackSystem<Event, Out>>,
+    erased : ResMut<'w, ErasedCallbackSystem<E, E::Response>>,
     world  : UnsafeWorldCell<'w>
 }
 
-impl<Event, Out> Callback<'_, Event, Out> {
-    pub fn request(&mut self, event : Event) -> Out {
-        unsafe { self.erased.system.run_unsafe(Request(event), self.world) }
+impl<E> Callback<'_, E>
+where
+    E : Request
+{
+    pub fn request(&mut self, req : E) -> E::Response {
+        unsafe { self.erased.system.run_unsafe(Req(req), self.world) }
     }
 }
 
-unsafe impl<Event, Out> SystemParam for Callback<'_, Event, Out> {
+unsafe impl<E> SystemParam for Callback<'_, E>
+where
+    E : Request
+{
     type State        = ComponentId;
-    type Item<'w, 's> = Callback<'w, Event, Out>;
+    type Item<'w, 's> = Callback<'w, E>;
 
     fn init_state(
         world       : &mut World,
         system_meta : &mut SystemMeta
     ) -> Self::State {
-        let erased     = world.resource::<ErasedCallbackSystem<Event, Out>>();
+        let erased     = world.resource::<ErasedCallbackSystem<E, E::Response>>();
         let other_meta = erased.state.meta();
 
         if (! (
@@ -235,14 +244,14 @@ unsafe impl<Event, Out> SystemParam for Callback<'_, Event, Out> {
         )) { panic!(
             "error[B0002]: A parameter in system {} (via Callback<{}, {}>) conflicts with a previous parameter in system {}. Consider removing the duplicate access. See: https://bevyengine.org/learn/errors/b0002",
             erased.system.name(),
-            core::any::type_name::<Event>(),
-            core::any::type_name::<Out>(),
+            core::any::type_name::<E>(),
+            core::any::type_name::<E::Response>(),
             system_meta.name()
         ); }
 
         unsafe { system_meta.component_access_set_mut().extend(other_meta.component_access_set().clone()); }
         unsafe { system_meta.archetype_component_access_mut().extend(other_meta.archetype_component_access()); }
-        <ResMut<'static, ErasedCallbackSystem<Event, Out>> as SystemParam>::init_state(world, system_meta)
+        <ResMut<'static, ErasedCallbackSystem<E, E::Response>> as SystemParam>::init_state(world, system_meta)
     }
 
     #[inline]
@@ -252,7 +261,7 @@ unsafe impl<Event, Out> SystemParam for Callback<'_, Event, Out> {
         world       : UnsafeWorldCell<'w>,
         change_tick : Tick,
     ) -> Self::Item<'w, 's> {
-        let mut erased = unsafe { <ResMut<'w, ErasedCallbackSystem<Event, Out>> as SystemParam>::get_param(state, system_meta, world, change_tick) };
+        let mut erased = unsafe { <ResMut<'w, ErasedCallbackSystem<E, E::Response>> as SystemParam>::get_param(state, system_meta, world, change_tick) };
         erased.system.update_archetype_component_access(world);
         Callback { erased, world }
     }
@@ -263,7 +272,7 @@ unsafe impl<Event, Out> SystemParam for Callback<'_, Event, Out> {
         world        : &mut World
     ) {
         let     world  = world.as_unsafe_world_cell();
-        let mut erased = unsafe { world.get_resource_mut::<ErasedCallbackSystem<Event, Out>>() }.unwrap();
+        let mut erased = unsafe { world.get_resource_mut::<ErasedCallbackSystem<E, E::Response>>() }.unwrap();
         erased.system.apply_deferred(unsafe { world.world_mut() });
     }
 }

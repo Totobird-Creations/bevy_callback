@@ -24,6 +24,9 @@ struct Player {
 
 #[derive(Event)]
 struct StatusRequest;
+impl Request for StatusRequest {
+    type Response = String;
+}
 
 
 fn main() {
@@ -67,7 +70,7 @@ fn spawn_players(
 
 fn request_status(
     mut query    : Query<&mut Player>,
-    mut callback : Callback<StatusRequest, String>
+    mut callback : Callback<StatusRequest>
 ) {
     println!("Current status: {:?}", callback.request(StatusRequest));
     println!("Expected {}", query.iter().len());
@@ -79,7 +82,7 @@ fn request_status(
 
 
 fn status_response(
-        _request : Request<StatusRequest>,
+        _request : Req<StatusRequest>,
     mut cmds     : Commands,
         query    : Query<(), With<Player>>
 ) -> String {
