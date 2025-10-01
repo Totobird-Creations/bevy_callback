@@ -22,7 +22,6 @@ struct Player {
     pinged : usize
 }
 
-#[derive(Event)]
 struct StatusRequest;
 impl Request for StatusRequest {
     type Response = String;
@@ -84,8 +83,9 @@ fn request_status(
 fn status_response(
         _request : Req<StatusRequest>,
     mut cmds     : Commands,
-        query    : Query<(), With<Player>>
+        query    : Query<&Player>
 ) -> String {
+    println!("status requested");
     cmds.spawn(Player { name : "new".to_string(), pinged : 0 });
     format!("{} players exist.", query.iter().len())
 }

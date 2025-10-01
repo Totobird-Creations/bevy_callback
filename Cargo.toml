@@ -4,8 +4,9 @@ version = "0.1.0"
 edition = "2024"
 
 [features]
-default = [ "app" ]
+default = [ "app", "debug" ]
 app     = [ "dep:bevy_app" ]
+debug   = [ "bevy_utils/debug" ]
 
 [lints.rust]
 unused_parens = "allow"
@@ -17,5 +18,9 @@ default-features = false
 optional         = true
 
 [dependencies.bevy_ecs]
+version          = "0.17"
+default-features = false
+
+[dependencies.bevy_utils]
 version          = "0.17"
 default-features = false
