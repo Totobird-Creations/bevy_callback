@@ -83,7 +83,7 @@ fn request_status(
 fn status_response(
         _request : Req<StatusRequest>,
     mut cmds     : Commands,
-        query    : Query<&Player>
+        query    : Query<(), With<Player>>
 ) -> String {
     println!("status requested");
     cmds.spawn(Player { name : "new".to_string(), pinged : 0 });

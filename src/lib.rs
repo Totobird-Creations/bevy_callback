@@ -70,7 +70,15 @@ impl AppExt for bevy_app::App {
         S         : IntoSystem<Req<R>, R::Response, M> + 'static,
         S::System : ParametisedSystem
     {
-        let     world  = self.world_mut();
+        let world = self.world_mut();
+        if (world.contains_resource::<ErasedReqSystem<R>>()) {
+            panic!(
+                "Duplicate ({}) -> {} callback registered",
+                core::any::type_name::<R>(),
+                core::any::type_name::<R::Response>()
+            );
+        }
+
         let mut system = IntoSystem::into_system(system);
         let     state  = SystemState::<<S::System as ParametisedSystem>::Param>::new(world);
         let mut meta   = state.meta().clone();
