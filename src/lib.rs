@@ -242,10 +242,9 @@ where
             system_meta.component_access_set().is_compatible(other_meta.component_access_set())
             && system_meta.archetype_component_access().is_compatible(other_meta.archetype_component_access())
         )) { panic!(
-            "error[B0002]: A parameter in system {} (via Callback<{}, {}>) conflicts with a previous parameter in system {}. Consider removing the duplicate access. See: https://bevyengine.org/learn/errors/b0002",
+            "error[B0002]: A parameter in system {} (via Callback<{}>) conflicts with a previous parameter in system {}. Consider removing the duplicate access. See: https://bevyengine.org/learn/errors/b0002",
             erased.system.name(),
             core::any::type_name::<E>(),
-            core::any::type_name::<E::Response>(),
             system_meta.name()
         ); }
 
