@@ -33,7 +33,8 @@ pub mod prelude {
         AppExt as _,
         Request,
         Req,
-        Callback
+        Callback,
+        OptionCallback
     };
 }
 
