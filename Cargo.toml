@@ -1,0 +1,21 @@
+[package]
+name = "bevy_callback"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+default = [ "app" ]
+app     = [ "dep:bevy_app" ]
+
+[lints.rust]
+unused_parens = "allow"
+
+
+[dependencies.bevy_app]
+version          = "0.16"
+default-features = false
+optional         = true
+
+[dependencies.bevy_ecs]
+version          = "0.16"
+default-features = false
