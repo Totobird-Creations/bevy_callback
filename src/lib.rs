@@ -15,7 +15,6 @@ use bevy_ecs::{
         SystemParam,
         SystemParamValidationError,
         SystemMeta,
-        SystemState,
         PipeSystem,
         CombinatorSystem,
         Combine,
@@ -38,8 +37,7 @@ pub mod prelude {
         AppExt as _,
         Request,
         Req,
-        Callback,
-        // OptionCallback
+        Callback
     };
 }
 
@@ -80,15 +78,7 @@ impl AppExt for bevy_app::App {
         }
 
         let mut system = IntoSystem::into_system(system);
-        let     state  = SystemState::<<S::System as ParametisedSystem>::Param>::new(world);
-        let mut meta   = state.meta().clone();
-        let mut access = FilteredAccessSet::new();
-        <S::System as ParametisedSystem>::Param::init_access(state.param_state(), &mut meta, &mut access, world);
-        assert_eq!(state.meta().has_deferred(), meta.has_deferred());
-        assert_eq!(state.meta().is_send(),      meta.is_send());
-        assert_eq!(state.meta().name(),         meta.name());
-
-        system.initialize(world);
+        let     access = system.initialize(world);
         world.insert_resource(ErasedReqSystem {
             system : Box::new(system),
             access

@@ -6,7 +6,6 @@ use bevy_app::{
 };
 use bevy_ecs::{
     component::Component,
-    event::Event,
     query::With,
     schedule::ApplyDeferred,
     system::{
